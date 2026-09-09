@@ -1,0 +1,949 @@
+<!doctype html>
+<!--
+  one-file-mbox-and-eml-viewer - just select and view your .mbox and .eml files.
+  Copyright (C) 2026  Oktay Mercan <https://github.com/oktaymercan>
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+  SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#ffffff">
+<title>MBOX Okuyucu</title>
+<style>
+  :root{
+    --paper:#f4f6f8;
+    --surface:#ffffff;
+    --ink:#16202b;
+    --muted:#63737f;
+    --line:#e0e5ea;
+    --line-soft:#eef1f4;
+    --accent:#1b4f72;
+    --accent-soft:#e8f0f6;
+    --amber:#a8641c;
+    --sel:#dceaf4;
+    --radius:6px;
+    --shade:#fdf6e9; --shade-line:#f0dcb8; --shade-ink:#6b4d17;
+    color-scheme:light;
+  }
+  body.dark{
+    --paper:#000000;
+    --surface:#000000;
+    --ink:#dfe3e6;
+    --muted:#8b949c;
+    --line:#22272b;
+    --line-soft:#131619;
+    --accent:#7fb2dd;
+    --accent-soft:#0d1a24;
+    --sel:#0f1c26;
+    --amber:#d3a05f;
+    --shade:#181310; --shade-line:#37291a; --shade-ink:#d9b478;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    font-size:14px;
+    color:var(--ink);
+    background:var(--paper);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  button{font:inherit;color:inherit}
+
+  /* ---------- Üst çubuk ---------- */
+  .bar{
+    flex:0 0 auto;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:9px 14px;
+    background:var(--surface);
+    border-bottom:1px solid var(--line);
+    flex-wrap:wrap;
+  }
+  .brand{
+    display:flex;align-items:center;gap:8px;
+    font-weight:650;letter-spacing:.2px;margin-right:4px;
+  }
+  .brand svg{display:block}
+  .btn{
+    border:1px solid var(--line);
+    background:var(--surface);
+    padding:6px 12px;
+    border-radius:var(--radius);
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .btn:hover{background:var(--line-soft)}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover{background:#16405d}
+  .btn:disabled{opacity:.45;cursor:default}
+  .search{
+    flex:1 1 220px;min-width:160px;position:relative;
+  }
+  .search input{
+    width:100%;font:inherit;padding:7px 10px 7px 30px;
+    border:1px solid var(--line);border-radius:var(--radius);
+    background:var(--paper);color:inherit;
+  }
+  .search input:focus{outline:2px solid var(--accent);outline-offset:-1px;background:#fff}
+  .search svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);opacity:.5}
+  select{
+    font:inherit;padding:6px 8px;border:1px solid var(--line);
+    border-radius:var(--radius);background:var(--surface);color:inherit;
+  }
+  .stat{color:var(--muted);font-size:12.5px;margin-left:auto;white-space:nowrap}
+
+  /* ---------- Yerleşim ---------- */
+  .main{flex:1 1 auto;display:flex;min-height:0}
+  .list{
+    flex:0 0 clamp(280px, 30vw, 420px);
+    background:var(--surface);
+    border-right:1px solid var(--line);
+    overflow-y:auto;
+    min-height:0;
+  }
+  .reader{flex:1 1 auto;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--surface)}
+
+  /* ---------- Liste ---------- */
+  .item{
+    display:block;width:100%;text-align:left;
+    padding:10px 14px;border:0;border-bottom:1px solid var(--line-soft);
+    background:transparent;cursor:pointer;border-left:3px solid transparent;
+  }
+  .item:hover{background:var(--line-soft)}
+  .item.active{background:var(--sel);border-left-color:var(--accent)}
+  .item:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .item .top{display:flex;gap:8px;align-items:baseline}
+  .item .who{font-weight:600;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .item .when{flex:0 0 auto;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .item .subj{margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .item .snip{margin-top:2px;font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .clip{color:var(--amber);font-size:12px}
+
+  /* ---------- Okuma bölmesi ---------- */
+  .head{
+    flex:0 0 auto;padding:16px 22px 12px;border-bottom:1px solid var(--line);
+  }
+  .head h1{margin:0 0 10px;font-size:19px;line-height:1.35;font-weight:650}
+  .rows{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:13px}
+  .rows dt{color:var(--muted)}
+  .rows dd{margin:0;overflow-wrap:anywhere}
+  .tools{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center}
+  .seg{display:flex;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  .seg button{border:0;background:var(--surface);padding:5px 12px;cursor:pointer;border-right:1px solid var(--line)}
+  .seg button:last-child{border-right:0}
+  .seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+  .att{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .att a{
+    display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:inherit;
+    border:1px solid var(--line);border-radius:var(--radius);padding:5px 10px;font-size:12.5px;background:var(--paper);
+  }
+  .att a:hover{background:var(--accent-soft);border-color:var(--accent)}
+  .att .sz{color:var(--muted)}
+  .notice{
+    margin-top:10px;font-size:12.5px;background:var(--shade);border:1px solid var(--shade-line);
+    color:var(--shade-ink);padding:6px 10px;border-radius:var(--radius);
+    display:flex;gap:10px;align-items:center;
+  }
+  .notice button{border:1px solid var(--shade-line);background:transparent;color:inherit;border-radius:4px;padding:3px 9px;cursor:pointer}
+  iframe{flex:1 1 auto;width:100%;border:0;background:var(--surface);min-height:0}
+  .btn.icon{padding:6px 9px;line-height:1;display:inline-flex;align-items:center;gap:6px}
+  #flip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+
+  /* ---------- Boş / yükleme ---------- */
+  .empty{
+    flex:1 1 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:14px;padding:40px;text-align:center;color:var(--muted);
+  }
+  .empty h2{margin:0;color:var(--ink);font-size:17px;font-weight:650}
+  .empty p{margin:0;max-width:46ch;line-height:1.6}
+  .drop{
+    border:2px dashed var(--line);border-radius:10px;padding:34px 40px;background:var(--surface);
+    display:flex;flex-direction:column;align-items:center;gap:14px;
+  }
+  body.dragging .drop{border-color:var(--accent);background:var(--accent-soft)}
+  .prog{position:fixed;inset:0;background:var(--paper);opacity:.98;display:none;align-items:center;justify-content:center;z-index:20}
+  .prog.on{display:flex}
+  .prog .box{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:22px 26px;width:min(380px,86vw)}
+  .prog .track{height:6px;background:var(--line-soft);border-radius:3px;overflow:hidden;margin-top:12px}
+  .prog .fill{height:100%;width:0%;background:var(--accent);transition:width .12s linear}
+  .prog small{color:var(--muted)}
+  .back{display:none}
+  @media (max-width:760px){
+    .list{flex:1 1 100%;border-right:0}
+    .main.reading .list{display:none}
+    .reader{display:none}
+    .main.reading .reader{display:flex;flex:1 1 100%}
+    .back{display:inline-flex}
+    .stat{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <span class="brand">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8"><rect x="2.5" y="4.5" width="19" height="15" rx="2"/><path d="M3 6.5l9 6.5 9-6.5"/></svg>
+    <span data-i18n="brand">MBOX Okuyucu</span>
+  </span>
+  <button class="btn primary" id="pick" data-i18n="open">Dosya aç</button>
+  <input type="file" id="file" accept=".mbox,.mbx,.eml,.txt,message/rfc822,application/mbox" multiple hidden>
+  <button class="btn back" id="back" data-i18n="back">‹ Liste</button>
+  <label class="search">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+    <input type="search" id="q" data-i18n-ph="searchPh" placeholder="Gönderen veya konuda ara" disabled>
+  </label>
+  <select id="sort" disabled>
+    <option value="date-desc" data-i18n="sortNew">Yeniden eskiye</option>
+    <option value="date-asc" data-i18n="sortOld">Eskiden yeniye</option>
+    <option value="file" data-i18n="sortFile">Dosyadaki sıra</option>
+    <option value="from" data-i18n="sortFrom">Gönderene göre</option>
+    <option value="subject" data-i18n="sortSubj">Konuya göre</option>
+  </select>
+  <select id="lang" aria-label="Language">
+    <option value="tr">Türkçe</option>
+    <option value="en">English</option>
+  </select>
+  <button class="btn icon" id="theme" aria-pressed="false"><span id="themeIcon">☾</span><span id="themeLabel">Gece</span></button>
+  <span class="stat" id="stat"></span>
+</div>
+
+<div class="main" id="main">
+  <div class="list" id="list">
+    <div class="empty" id="listEmpty">
+      <div class="drop">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><path d="M12 16V4"/><path d="M8 8l4-4 4 4"/><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg>
+        <h2 data-i18n="dropTitle">Bir .mbox veya .eml dosyası seçin</h2>
+        <p data-i18n="dropText">Dosyayı buraya sürükleyip bırakabilir ya da yukarıdan seçebilirsiniz. Dosya bilgisayarınızdan çıkmaz, hiçbir yere yüklenmez.</p>
+        <button class="btn" id="pick2" data-i18n="choose">Dosya seç</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="reader" id="reader">
+    <div class="empty" id="readEmpty"><p data-i18n="pickMsg">Soldan bir ileti seçin.</p></div>
+    <div class="head" id="head" hidden>
+      <h1 id="subject"></h1>
+      <dl class="rows" id="rows"></dl>
+      <div class="tools">
+        <div class="seg" id="seg"></div>
+        <button class="btn" id="flip" hidden aria-pressed="true" data-i18n="flip">Karanlığa uyarla</button>
+        <button class="btn" id="dl" data-i18n="dl">.eml indir</button>
+      </div>
+      <div class="att" id="att"></div>
+      <div class="notice" id="remote" hidden>
+        <span data-i18n="blockedText">Bu ileti dışarıdan görsel yüklemek istiyor. Gizliliğiniz için engellendi.</span>
+        <button id="showRemote" data-i18n="showImages">Görselleri göster</button>
+      </div>
+    </div>
+    <iframe id="frame" hidden sandbox="allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer" data-i18n-title="frameTitle" title="İleti içeriği"></iframe>
+  </div>
+</div>
+
+<div class="prog" id="prog"><div class="box">
+  <strong id="progTitle">Dosya okunuyor</strong>
+  <div class="track"><div class="fill" id="progFill"></div></div>
+  <small id="progText">Hazırlanıyor…</small>
+</div></div>
+
+<script>
+"use strict";
+
+/* =======================================================================
+   1. Küçük yardımcılar: bayt <-> ikili metin, çözücüler
+   ======================================================================= */
+
+function bytesToBinary(u8){
+  let out = "", CH = 0x8000;
+  for (let i = 0; i < u8.length; i += CH) out += String.fromCharCode.apply(null, u8.subarray(i, i + CH));
+  return out;
+}
+function binaryToBytes(s){
+  const u = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i) & 0xFF;
+  return u;
+}
+const CHARSET_FIX = {
+  "utf8":"utf-8","utf-8":"utf-8","us-ascii":"utf-8","ascii":"utf-8","ansi_x3.4-1968":"utf-8",
+  "cp1254":"windows-1254","win-1254":"windows-1254","iso8859-9":"iso-8859-9",
+  "cp1252":"windows-1252","iso8859-1":"windows-1252","latin1":"windows-1252",
+  "cp1251":"windows-1251","cp1250":"windows-1250","unknown-8bit":"utf-8","x-unknown":"utf-8"
+};
+function decodeText(bin, charset){
+  let cs = (charset || "utf-8").toLowerCase().replace(/["']/g, "").trim();
+  cs = CHARSET_FIX[cs] || cs;
+  try { return new TextDecoder(cs, {fatal:false}).decode(binaryToBytes(bin)); }
+  catch (e) {
+    try { return new TextDecoder("utf-8").decode(binaryToBytes(bin)); } catch (e2) { return bin; }
+  }
+}
+function b64ToBinary(s){
+  s = s.replace(/[^A-Za-z0-9+/=]/g, "");
+  if (s.length % 4) s += "====".slice(s.length % 4);
+  try { return atob(s); } catch (e) {
+    try { return atob(s.replace(/=+$/,"").slice(0, Math.floor(s.length/4)*4)); } catch (e2) { return ""; }
+  }
+}
+function decodeQP(s){
+  return s.replace(/=\r?\n/g, "")
+          .replace(/=([0-9A-Fa-f]{2})/g, (m,h) => String.fromCharCode(parseInt(h,16)));
+}
+/* Bazı istemciler başlıkları kodlamadan, doğrudan UTF-8 bayt olarak yazar. */
+function maybeUTF8(s){
+  if (/[^\x00-\xFF]/.test(s) || !/[\x80-\xFF]/.test(s)) return s;
+  try { return new TextDecoder("utf-8", {fatal:true}).decode(binaryToBytes(s)); }
+  catch (e) { return s; }
+}
+/* =?charset?B|Q?metin?= başlık kodlaması */
+function decodeHeaderWords(v){
+  if (!v) return "";
+  v = maybeUTF8(v);
+  v = v.replace(/\?=[ \t]+(?==\?)/g, "?=");
+  return v.replace(/=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g, (m, cs, enc, txt) => {
+    try {
+      const bin = enc.toUpperCase() === "B" ? b64ToBinary(txt) : decodeQP(txt.replace(/_/g, " "));
+      return decodeText(bin, cs);
+    } catch (e) { return m; }
+  });
+}
+
+/* =======================================================================
+   2. Başlık ve MIME çözümleme
+   ======================================================================= */
+
+function splitHeaders(raw){
+  let i = raw.indexOf("\r\n\r\n"), skip = 4;
+  const j = raw.indexOf("\n\n");
+  if (i === -1 || (j !== -1 && j < i)) { i = j; skip = 2; }
+  if (i === -1) return { head: raw, body: "" };
+  return { head: raw.slice(0, i), body: raw.slice(i + skip) };
+}
+function parseHeaders(head){
+  const h = Object.create(null);
+  const lines = head.replace(/\r\n/g, "\n").replace(/\n[ \t]+/g, " ").split("\n");
+  for (const line of lines){
+    const c = line.indexOf(":");
+    if (c < 1) continue;
+    const k = line.slice(0, c).toLowerCase().trim();
+    const v = line.slice(c + 1).trim();
+    if (k in h) h[k] += ", " + v; else h[k] = v;
+  }
+  return h;
+}
+function parseParams(value){
+  const p = Object.create(null);
+  if (!value) return p;
+  const re = /;\s*([^=;\s]+)\s*=\s*("(?:[^"\\]|\\.)*"|[^;]*)/g;
+  let m;
+  while ((m = re.exec(value))){
+    let key = m[1].toLowerCase();
+    let val = m[2].trim().replace(/^"(.*)"$/s, "$1").replace(/\\(.)/g, "$1");
+    p[key] = val;
+  }
+  // RFC 2231: filename*=utf-8''..  ve  filename*0*=..
+  const out = Object.create(null);
+  const cont = Object.create(null);
+  for (const k in p){
+    const mm = /^([^*]+)(?:\*(\d+))?(\*)?$/.exec(k);
+    if (mm && !mm[2] && !mm[3]) { if (!(k in out)) out[k] = p[k]; continue; }
+    if (!mm) { if (!(k in out)) out[k] = p[k]; continue; }
+    const base = mm[1];
+    (cont[base] = cont[base] || []).push({ n: mm[2] ? +mm[2] : 0, ext: !!mm[3], v: p[k] });
+  }
+  for (const base in cont){
+    const parts = cont[base].sort((a,b) => a.n - b.n);
+    let charset = "utf-8", s = "";
+    parts.forEach((piece, idx) => {
+      let v = piece.v;
+      if (piece.ext){
+        if (idx === 0){
+          const g = /^([^']*)'([^']*)'(.*)$/s.exec(v);
+          if (g){ charset = g[1] || "utf-8"; v = g[3]; }
+        }
+        v = v.replace(/%([0-9A-Fa-f]{2})/g, (m,h) => String.fromCharCode(parseInt(h,16)));
+        s += decodeText(v, charset);
+      } else s += v;
+    });
+    out[base] = s;
+  }
+  return out;
+}
+function contentTypeOf(h){
+  const raw = h["content-type"] || "text/plain";
+  return { type: raw.split(";")[0].trim().toLowerCase() || "text/plain", params: parseParams(raw) };
+}
+function splitMultipart(body, boundary){
+  const marker = "--" + boundary;
+  const lines = body.split("\n");
+  const parts = [];
+  let cur = null;
+  for (const line of lines){
+    const t = line.charCodeAt(line.length-1) === 13 ? line.slice(0,-1) : line;
+    if (t === marker){ if (cur) parts.push(cur.join("\n")); cur = []; continue; }
+    if (t === marker + "--"){ if (cur){ parts.push(cur.join("\n")); cur = null; } break; }
+    if (cur) cur.push(line);
+  }
+  if (cur) parts.push(cur.join("\n"));
+  return parts;
+}
+function parseEntity(raw){
+  const { head, body } = splitHeaders(raw);
+  const headers = parseHeaders(head);
+  const { type, params } = contentTypeOf(headers);
+  if (type.startsWith("multipart/") && params.boundary){
+    return { headers, type, params, multipart:true,
+             parts: splitMultipart(body, params.boundary).map(parseEntity) };
+  }
+  const enc = (headers["content-transfer-encoding"] || "7bit").trim().toLowerCase();
+  let content = body;
+  if (enc === "base64") content = b64ToBinary(body);
+  else if (enc === "quoted-printable") content = decodeQP(body);
+  return { headers, type, params, content };
+}
+
+/* =======================================================================
+   3. mbox dosyasını iletilere bölme
+   ======================================================================= */
+
+const State = { bin:"", msgs:[], view:[], sel:-1, drawn:0, blobs:[], name:"", showRemote:false,
+                mode:"auto", current:null, dark:false, flip:true, lang:"tr" };
+
+/* ---- Diller ---- */
+const I18N = {
+  tr: {
+    _locale:"tr-TR", _dir:"ltr", title:"MBOX Okuyucu", brand:"MBOX Okuyucu",
+    open:"Dosya aç", back:"‹ Liste", choose:"Dosya seç",
+    searchPh:"Gönderen veya konuda ara",
+    sortNew:"Yeniden eskiye", sortOld:"Eskiden yeniye", sortFile:"Dosyadaki sıra",
+    sortFrom:"Gönderene göre", sortSubj:"Konuya göre",
+    night:"Gece", day:"Gündüz",
+    dropTitle:"Bir .mbox veya .eml dosyası seçin",
+    dropText:"Dosyaları buraya sürükleyip bırakabilir ya da yukarıdan seçebilirsiniz. Birden çok .eml dosyasını aynı anda açabilirsiniz. Dosyalar bilgisayarınızdan çıkmaz, hiçbir yere yüklenmez.",
+    fileCount:n => n + " dosya",
+    pickMsg:"Soldan bir ileti seçin.",
+    flip:"Karanlığa uyarla", dl:".eml indir",
+    blockedText:"Bu ileti dışarıdan görsel yüklemek istiyor. Gizliliğiniz için engellendi.",
+    showImages:"Görselleri göster", frameTitle:"İleti içeriği",
+    formatted:"Biçimli", plain:"Düz metin", source:"Kaynak",
+    from:"Gönderen", to:"Alıcı", cc:"Bilgi", date:"Tarih",
+    noSender:"(gönderen yok)", noSubject:"(konu yok)",
+    noBody:"(bu iletide metin gövdesi yok)", truncated:"… (kısaltıldı)",
+    blockedAlt:"[engellenen görsel]", messageFile:"ileti",
+    reading:"Dosya okunuyor", decoding:"Dosya çözümleniyor", toText:"Metne dönüştürülüyor…",
+    finding:"İletiler bulunuyor", headers:"Başlıklar okunuyor", preparing:"Hazırlanıyor…",
+    noMbox:"Bu dosyada e-posta bulunamadı. Dosyanın gerçekten bir .mbox arşivi ya da .eml iletisi olduğundan emin olun.",
+    count:n => n.toLocaleString("tr-TR") + " ileti",
+    noMatch:"Aramanızla eşleşen ileti yok.", empty:"Bu dosyada ileti yok."
+  },
+  en: {
+    _locale:"en-US", _dir:"ltr", title:"MBOX Reader", brand:"MBOX Reader",
+    open:"Open file", back:"‹ List", choose:"Choose file",
+    searchPh:"Search sender or subject",
+    sortNew:"Newest first", sortOld:"Oldest first", sortFile:"File order",
+    sortFrom:"By sender", sortSubj:"By subject",
+    night:"Night", day:"Day",
+    dropTitle:"Choose an .mbox or .eml file",
+    dropText:"Drop files here or pick them above. You can open several .eml files at once. They stay on your computer and are never uploaded.",
+    fileCount:n => n + " files",
+    pickMsg:"Select a message from the list.",
+    flip:"Adapt to dark", dl:"Save .eml",
+    blockedText:"This message wants to load images from the internet. They were blocked for your privacy.",
+    showImages:"Show images", frameTitle:"Message content",
+    formatted:"Formatted", plain:"Plain text", source:"Source",
+    from:"From", to:"To", cc:"Cc", date:"Date",
+    noSender:"(no sender)", noSubject:"(no subject)",
+    noBody:"(this message has no text body)", truncated:"… (truncated)",
+    blockedAlt:"[blocked image]", messageFile:"message",
+    reading:"Reading file", decoding:"Decoding file", toText:"Converting to text…",
+    finding:"Finding messages", headers:"Reading headers", preparing:"Preparing…",
+    noMbox:"No email was found in this file. Check that it really is an .mbox archive or an .eml message.",
+    count:n => n.toLocaleString("en-US") + (n === 1 ? " message" : " messages"),
+    noMatch:"No messages match your search.", empty:"This file has no messages."
+  }
+};
+const t = k => I18N[State.lang][k];
+const fmtShort = ts => ts ? new Date(ts).toLocaleDateString(t("_locale"), {day:"2-digit",month:"short",year:"numeric"}) : "";
+const fmtLong  = ts => ts ? new Date(ts).toLocaleString(t("_locale"), {dateStyle:"medium",timeStyle:"short"}) : "";
+
+function findMessageStarts(bin, onProgress){
+  return new Promise(resolve => {
+    const starts = [], len = bin.length;
+    let pos = 0, prevBlank = true;
+    (function step(){
+      const t0 = performance.now();
+      while (pos < len){
+        if (prevBlank && bin.startsWith("From ", pos)) starts.push(pos);
+        let nl = bin.indexOf("\n", pos);
+        if (nl === -1) nl = len;
+        prevBlank = (nl === pos) || (nl === pos + 1 && bin.charCodeAt(pos) === 13);
+        pos = nl + 1;
+        if (performance.now() - t0 > 28) break;
+      }
+      if (pos < len){ onProgress(pos / len); setTimeout(step, 0); }
+      else { onProgress(1); resolve(starts); }
+    })();
+  });
+}
+function displayName(addr){
+  if (!addr) return "";
+  let s = decodeHeaderWords(addr).split(/,(?![^<]*>)/)[0].trim();
+  const m = /^(.*?)<([^>]*)>\s*$/s.exec(s);
+  if (m){
+    const nm = m[1].trim().replace(/^"(.*)"$/s, "$1").trim();
+    return nm || m[2].trim();
+  }
+  return s.replace(/^"(.*)"$/s, "$1");
+}
+function parseDate(h, fromLine){
+  let d = h["date"] ? new Date(h["date"].replace(/\s*\([^)]*\)\s*$/, "")) : null;
+  if (d && !isNaN(d)) return d;
+  const m = /^From\s+\S*\s+(.+)$/.exec(fromLine || "");
+  if (m){ d = new Date(m[1]); if (!isNaN(d)) return d; }
+  return null;
+}
+function buildIndex(starts, ends, onProgress){
+  return new Promise(resolve => {
+    const bin = State.bin, out = [], n = starts.length;
+    let i = 0;
+    (function step(){
+      const t0 = performance.now();
+      while (i < n){
+        const start = starts[i], end = ends[i];
+        /* mbox ayırıcı satırı ("From gonderen tarih") varsa atlanır; .eml'de yoktur. */
+        const isSep = bin.startsWith("From ", start);
+        const nl = isSep ? bin.indexOf("\n", start) : -1;
+        const fromLine = isSep ? bin.slice(start, nl === -1 ? end : nl) : "";
+        const bodyStart = isSep ? (nl === -1 ? end : nl + 1) : start;
+        const headEnd = Math.min(end, bodyStart + 200000);
+        const chunk = bin.slice(bodyStart, headEnd);
+        const h = parseHeaders(splitHeaders(chunk).head);
+        const d = parseDate(h, fromLine);
+        out.push({
+          i: out.length, start, bodyStart, end, sep: isSep,
+          from: displayName(h["from"]),
+          subject: decodeHeaderWords(h["subject"] || "").trim(),
+          rawDate: h["date"] || "",
+          ts: d ? d.getTime() : 0,
+          clip: /multipart\/(mixed|related)/i.test(h["content-type"] || ""),
+          snip: null
+        });
+        i++;
+        if (performance.now() - t0 > 28) break;
+      }
+      if (i < n){ onProgress(i / n); setTimeout(step, 0); }
+      else {
+        for (const m of out){ m.key = (m.from + " " + m.subject).toLowerCase(); }
+        onProgress(1); resolve(out);
+      }
+    })();
+  });
+}
+/* Bir metin parçası tek başına e-posta gibi mi duruyor? (.eml doğrulaması) */
+function looksLikeEmail(bin, start, end){
+  const head = splitHeaders(bin.slice(start, Math.min(end, start + 100000))).head;
+  return /^(from|to|subject|date|message-id)\s*:/im.test(head);
+}
+
+/* =======================================================================
+   4. İletiden gövde ve ekleri toplama
+   ======================================================================= */
+
+const EXT = {"image/jpeg":".jpg","image/png":".png","image/gif":".gif","image/webp":".webp",
+  "application/pdf":".pdf","text/plain":".txt","text/html":".html","message/rfc822":".eml","application/zip":".zip"};
+
+function buildMessage(m){
+  let raw = State.bin.slice(m.bodyStart, m.end);
+  /* mbox yazarları gövdedeki "From " ile başlayan satırların başına ">" ekler
+     (mboxo/mboxrd). Ayırıcı satırı olan iletilerde bu kaçış geri alınır. */
+  if (m.sep) raw = raw.replace(/(^|\n)>(>*From )/g, "$1$2");
+  const root = parseEntity(raw);
+  const res = { headers: root.headers, text:null, html:null, atts:[], inline:Object.create(null), raw };
+  let counter = 0;
+  (function walk(e){
+    if (e.multipart){ e.parts.forEach(walk); return; }
+    const disp = e.headers["content-disposition"] || "";
+    const dtype = disp.split(";")[0].trim().toLowerCase();
+    const dparams = parseParams(disp);
+    const name = decodeHeaderWords(dparams.filename || e.params.name || "");
+    const cid = (e.headers["content-id"] || "").replace(/[<>]/g, "").trim();
+    const isText = e.type === "text/plain" || e.type === "text/html";
+
+    if (dtype === "attachment" || (!isText && (name || e.type !== "text/plain")) || (isText && dtype === "attachment")){
+      if (e.type.startsWith("multipart/")) return;
+      const item = { name: name || ("ek-" + (++counter) + (EXT[e.type] || ".bin")),
+                     type: e.type || "application/octet-stream", data: e.content || "", cid,
+                     inlineOnly: !!cid && dtype !== "attachment" && e.type.startsWith("image/") };
+      if (item.cid) res.inline[item.cid] = item;
+      res.atts.push(item);
+      return;
+    }
+    const txt = decodeText(e.content || "", e.params.charset);
+    if (e.type === "text/html") res.html = (res.html || "") + txt;
+    else res.text = (res.text || "") + (res.text ? "\n\n" : "") + txt;
+  })(root);
+  return res;
+}
+function blobUrlFor(att){
+  if (att._url) return att._url;
+  const url = URL.createObjectURL(new Blob([binaryToBytes(att.data)], { type: att.type }));
+  State.blobs.push(url); att._url = url;
+  return url;
+}
+function humanSize(n){
+  if (n < 1024) return n + " B";
+  if (n < 1048576) return (n/1024).toFixed(1) + " KB";
+  return (n/1048576).toFixed(1) + " MB";
+}
+
+/* =======================================================================
+   5. HTML gövdeyi güvenli hale getirme
+   ======================================================================= */
+
+function prepareHTML(html, msg, allowRemote){
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  let blocked = false;
+  doc.querySelectorAll("script,object,embed,iframe,form,link[rel~='stylesheet' i],meta[http-equiv]").forEach(n => n.remove());
+  doc.querySelectorAll("*").forEach(el => {
+    for (const a of Array.from(el.attributes)) if (/^on/i.test(a.name)) el.removeAttribute(a.name);
+  });
+  doc.querySelectorAll("[src],[background],[srcset]").forEach(el => {
+    el.removeAttribute("srcset");
+    let src = el.getAttribute("src") || el.getAttribute("background") || "";
+    if (/^cid:/i.test(src)){
+      const key = decodeURIComponent(src.slice(4)).replace(/[<>]/g, "");
+      const part = msg.inline[key] || Object.values(msg.inline).find(p => p.cid.endsWith(key) || key.endsWith(p.cid));
+      if (part) el.setAttribute("src", blobUrlFor(part));
+      else el.removeAttribute("src");
+      return;
+    }
+    if (/^https?:/i.test(src) && !allowRemote){
+      blocked = true;
+      el.removeAttribute("src"); el.removeAttribute("background");
+      el.setAttribute("alt", el.getAttribute("alt") || t("blockedAlt"));
+      el.setAttribute("style", (el.getAttribute("style")||"") + ";min-width:0;min-height:0;max-width:100%;");
+    }
+  });
+  doc.querySelectorAll("a[href]").forEach(a => { a.setAttribute("target","_blank"); a.setAttribute("rel","noopener noreferrer"); });
+  return { html: doc.documentElement.outerHTML, blocked };
+}
+function esc(s){ return s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function textToHTML(t){
+  return "<pre>" + esc(t).replace(/(https?:\/\/[^\s<]+)/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>') + "</pre>";
+}
+function frameCSS(dark, invert){
+  const fg = dark ? "#dfe3e6" : "#16202b";
+  const bg = dark ? "#000000" : "#ffffff";
+  const quote = dark ? "#252b30" : "#d7dee5";
+  const quoteFg = dark ? "#98a2aa" : "#4a5a68";
+  return "<style>" +
+  "html,body{margin:0;background:" + bg + "}" +
+  "body{padding:18px 22px;font:14px/1.65 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:" + fg + ";word-wrap:break-word}" +
+  "pre{white-space:pre-wrap;word-wrap:break-word;font:13.5px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:0}" +
+  "img{max-width:100%;height:auto}table{max-width:100%}a{color:" + (dark ? "#7fb2dd" : "#1b4f72") + "}" +
+  "blockquote{border-left:3px solid " + quote + ";margin:8px 0;padding:2px 0 2px 12px;color:" + quoteFg + "}" +
+  /* Beyaz zeminli HTML postaları çevirerek gerçek siyaha indirir; görseller geri çevrilir. */
+  (invert ? ".flip{filter:invert(1) hue-rotate(180deg);background:#fff;margin:-18px -22px;padding:18px 22px;min-height:100vh}" +
+            ".flip img,.flip video,.flip svg,.flip [style*='background-image']{filter:invert(1) hue-rotate(180deg)}" : "") +
+  "</style>";
+}
+
+/* =======================================================================
+   6. Arayüz
+   ======================================================================= */
+
+const $ = id => document.getElementById(id);
+const listEl = $("list"), frame = $("frame"), progEl = $("prog");
+
+function setProgress(on, title, pct, text){
+  progEl.classList.toggle("on", on);
+  if (title) $("progTitle").textContent = title;
+  if (typeof pct === "number") $("progFill").style.width = Math.round(pct*100) + "%";
+  if (text !== undefined) $("progText").textContent = text;
+}
+
+async function loadFiles(fileList){
+  const files = Array.from(fileList || []).filter(Boolean);
+  if (!files.length) return;
+  State.blobs.forEach(URL.revokeObjectURL);
+  Object.assign(State, { bin:"", msgs:[], view:[], sel:-1, drawn:0, blobs:[], current:null,
+    name: files.length === 1 ? files[0].name : t("fileCount")(files.length) });
+  $("head").hidden = true; frame.hidden = true; $("readEmpty").style.display = "";
+
+  const chunks = [], starts = [], ends = [];
+  let offset = 0;
+
+  for (let fi = 0; fi < files.length; fi++){
+    const f = files[fi];
+    const share = 1 / files.length, base = fi * share;
+    setProgress(true, t("reading"), base, f.name + " · " + humanSize(f.size));
+    await new Promise(r => setTimeout(r, files.length > 1 ? 0 : 30));
+
+    const bin = bytesToBinary(new Uint8Array(await f.arrayBuffer()));
+    chunks.push(bin);
+
+    /* Önce mbox ayırıcıları aranır; hiç yoksa dosya tek bir .eml iletisi sayılır. */
+    let local = await findMessageStarts(bin, p =>
+      setProgress(true, t("finding"), base + p * share * .6, Math.round(p*100) + "%"));
+    if (!local.length && looksLikeEmail(bin, 0, bin.length)) local = [0];
+
+    for (let k = 0; k < local.length; k++){
+      starts.push(offset + local[k]);
+      ends.push(offset + (k + 1 < local.length ? local[k+1] : bin.length));
+    }
+    offset += bin.length;
+  }
+  State.bin = chunks.join("");
+  chunks.length = 0;
+
+  if (!starts.length){
+    setProgress(false);
+    alert(t("noMbox"));
+    return;
+  }
+  State.msgs = await buildIndex(starts, ends, p =>
+    setProgress(true, t("headers"), .9 + p * .1, Math.round(p*100) + "%"));
+
+  setProgress(false);
+  $("q").disabled = false; $("sort").disabled = false;
+  updateStat();
+  applyFilter();
+}
+const loadFile = f => loadFiles([f]);
+
+function applyFilter(){
+  const q = $("q").value.trim().toLowerCase();
+  let v = State.msgs;
+  if (q){
+    const words = q.split(/\s+/);
+    v = v.filter(m => words.every(w => m.key.includes(w)));
+  } else v = v.slice();
+
+  const mode = $("sort").value, loc = t("_locale");
+  if (mode === "date-desc") v.sort((a,b) => b.ts - a.ts || a.i - b.i);
+  else if (mode === "date-asc") v.sort((a,b) => a.ts - b.ts || a.i - b.i);
+  else if (mode === "from") v.sort((a,b) => a.from.localeCompare(b.from, loc) || b.ts - a.ts);
+  else if (mode === "subject") v.sort((a,b) => a.subject.localeCompare(b.subject, loc) || b.ts - a.ts);
+
+  State.view = v; State.drawn = 0;
+  listEl.textContent = "";
+  if (!v.length){
+    const d = document.createElement("div");
+    d.className = "empty";
+    d.innerHTML = "<p></p>";
+    d.firstChild.textContent = q ? t("noMatch") : t("empty");
+    listEl.appendChild(d);
+    return;
+  }
+  drawMore();
+}
+function updateStat(){
+  $("stat").textContent = State.msgs.length ? State.name + " · " + t("count")(State.msgs.length) : "";
+}
+function snippetOf(m){
+  if (m.snip !== null) return m.snip;
+  m.snip = "";
+  if (m.end - m.bodyStart < 400000){
+    try {
+      const b = buildMessage(m);
+      let t = b.text || (b.html ? new DOMParser().parseFromString(b.html, "text/html").body.textContent : "");
+      m.snip = (t || "").replace(/\s+/g, " ").trim().slice(0, 140);
+    } catch (e) {}
+  }
+  return m.snip;
+}
+function drawMore(){
+  const frag = document.createDocumentFragment();
+  const stop = Math.min(State.drawn + 50, State.view.length);
+  for (let k = State.drawn; k < stop; k++){
+    const m = State.view[k];
+    const b = document.createElement("button");
+    b.className = "item" + (State.sel === m.i ? " active" : "");
+    b.dataset.i = m.i;
+    b.innerHTML =
+      '<span class="top"><span class="who"></span>' + (m.clip ? '<span class="clip">📎</span>' : "") +
+      '<span class="when"></span></span><span class="subj"></span><span class="snip"></span>';
+    b.querySelector(".who").textContent = m.from || t("noSender");
+    b.querySelector(".when").textContent = fmtShort(m.ts);
+    b.querySelector(".subj").textContent = m.subject || t("noSubject");
+    b.querySelector(".snip").textContent = snippetOf(m);
+    frag.appendChild(b);
+  }
+  listEl.appendChild(frag);
+  State.drawn = stop;
+}
+listEl.addEventListener("scroll", () => {
+  if (State.drawn < State.view.length && listEl.scrollTop + listEl.clientHeight > listEl.scrollHeight - 300) drawMore();
+});
+listEl.addEventListener("click", e => {
+  const b = e.target.closest(".item");
+  if (b) select(+b.dataset.i);
+});
+
+function select(i, keep){
+  State.sel = i;
+  document.querySelectorAll(".item").forEach(el => el.classList.toggle("active", +el.dataset.i === i));
+  if (!keep) $("main").classList.add("reading");
+  const m = State.msgs[i];
+  const b = buildMessage(m);
+  State.current = { m, b };
+  if (!keep){
+    State.showRemote = false;
+    State.mode = b.html ? "html" : "text";
+  }
+  if (State.mode === "html" && !b.html) State.mode = "text";
+
+  $("readEmpty").style.display = "none";
+  $("head").hidden = false; frame.hidden = false;
+  $("subject").textContent = m.subject || t("noSubject");
+
+  const rows = $("rows"); rows.innerHTML = "";
+  const add = (label, val) => {
+    if (!val) return;
+    const dt = document.createElement("dt"), dd = document.createElement("dd");
+    dt.textContent = label; dd.textContent = decodeHeaderWords(val);
+    rows.append(dt, dd);
+  };
+  add(t("from"), b.headers["from"]);
+  add(t("to"), b.headers["to"]);
+  add(t("cc"), b.headers["cc"]);
+  add(t("date"), fmtLong(m.ts) || m.rawDate);
+
+  const seg = $("seg"); seg.innerHTML = "";
+  const modes = [];
+  if (b.html) modes.push(["html", t("formatted")]);
+  if (b.text) modes.push(["text", t("plain")]);
+  modes.push(["source", t("source")]);
+  for (const [key,label] of modes){
+    const btn = document.createElement("button");
+    btn.textContent = label; btn.dataset.mode = key;
+    btn.setAttribute("aria-pressed", String(key === State.mode));
+    btn.onclick = () => { State.mode = key; renderBody(); 
+      seg.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.mode === key))); };
+    seg.appendChild(btn);
+  }
+
+  const att = $("att"); att.innerHTML = "";
+  const visible = b.atts.filter(a => !a.inlineOnly);
+  for (const a of visible){
+    const link = document.createElement("a");
+    link.href = blobUrlFor(a); link.download = a.name;
+    link.innerHTML = '<span>📎</span><span></span><span class="sz"></span>';
+    link.children[1].textContent = a.name;
+    link.children[2].textContent = humanSize(a.data.length);
+    att.appendChild(link);
+  }
+  renderBody();
+  listEl.querySelector('.item[data-i="' + i + '"]')?.scrollIntoView?.({block:"nearest"});
+}
+
+function renderBody(){
+  if (!State.current) return;
+  const { b } = State.current;
+  let inner, blocked = false, isHTML = false;
+  if (State.mode === "source") inner = "<pre>" + esc(b.raw.length > 400000 ? decodeText(b.raw.slice(0,400000)) + "\n\n" + t("truncated") : decodeText(b.raw, "utf-8")) + "</pre>";
+  else if (State.mode === "html" && b.html){
+    const r = prepareHTML(b.html, b, State.showRemote);
+    inner = r.html; blocked = r.blocked; isHTML = true;
+  }
+  else inner = textToHTML(b.text || t("noBody"));
+
+  const flip = State.dark && isHTML && State.flip;
+  if (flip) inner = '<div class="flip">' + inner + "</div>";
+  $("flip").hidden = !(State.dark && isHTML);
+  $("flip").setAttribute("aria-pressed", String(!!State.flip));
+  $("remote").hidden = !blocked;
+  frame.srcdoc = "<!doctype html><html><head><meta charset='utf-8'><base target='_blank'>" +
+    frameCSS(State.dark, flip) + "</head><body>" + inner + "</body></html>";
+}
+function setLang(code){
+  State.lang = I18N[code] ? code : "en";
+  document.documentElement.lang = State.lang;
+  document.title = t("title");
+  $("lang").value = State.lang;
+  document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll("[data-i18n-ph]").forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
+  document.querySelectorAll("[data-i18n-title]").forEach(el => { el.title = t(el.dataset.i18nTitle); });
+  $("themeLabel").textContent = State.dark ? t("day") : t("night");
+  if (State.msgs.length){
+    updateStat();
+    const sel = State.sel;
+    applyFilter();
+    if (sel >= 0) select(sel, true);
+  }
+}
+$("lang").onchange = e => setLang(e.target.value);
+$("theme").onclick = () => setTheme(!State.dark);
+$("flip").onclick = () => { State.flip = !State.flip; renderBody(); };
+function setTheme(dark){
+  State.dark = dark;
+  document.body.classList.toggle("dark", dark);
+  $("theme").setAttribute("aria-pressed", String(dark));
+  $("themeIcon").textContent = dark ? "☀" : "☾";
+  $("themeLabel").textContent = dark ? t("day") : t("night");
+  document.querySelector("meta[name=theme-color]").content = dark ? "#000000" : "#ffffff";
+  renderBody();
+}
+setLang((navigator.languages || [navigator.language || "en"]).some(l => /^tr\b/i.test(l)) ? "tr" : "en");
+setTheme(!!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches));
+$("showRemote").onclick = () => { State.showRemote = true; renderBody(); };
+$("dl").onclick = () => {
+  const { m, b } = State.current;
+  const url = URL.createObjectURL(new Blob([binaryToBytes(b.raw)], {type:"message/rfc822"}));
+  const a = document.createElement("a");
+  a.href = url; a.download = (m.subject.replace(/[\\/:*?"<>|]/g,"_").slice(0,60) || t("messageFile")) + ".eml";
+  a.click(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+};
+
+/* --- dosya seçme, sürükle-bırak, klavye --- */
+$("pick").onclick = $("pick2").onclick = () => $("file").click();
+$("file").onchange = e => loadFiles(e.target.files);
+$("back").onclick = () => $("main").classList.remove("reading");
+$("q").oninput = applyFilter;
+$("sort").onchange = applyFilter;
+
+["dragenter","dragover"].forEach(ev => document.addEventListener(ev, e => {
+  e.preventDefault(); document.body.classList.add("dragging");
+}));
+["dragleave","drop"].forEach(ev => document.addEventListener(ev, e => {
+  if (ev === "drop") e.preventDefault();
+  if (ev === "drop" || e.relatedTarget === null) document.body.classList.remove("dragging");
+}));
+document.addEventListener("drop", e => {
+  const fs = e.dataTransfer?.files;
+  if (fs && fs.length) loadFiles(fs);
+});
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "j" && e.key !== "k") return;
+  const pos = State.view.findIndex(m => m.i === State.sel);
+  const next = (e.key === "ArrowDown" || e.key === "j") ? pos + 1 : pos - 1;
+  if (next >= 0 && next < State.view.length){
+    e.preventDefault();
+    if (next >= State.drawn) drawMore();
+    select(State.view[next].i);
+  }
+});
+</script>
+</body>
+</html>
