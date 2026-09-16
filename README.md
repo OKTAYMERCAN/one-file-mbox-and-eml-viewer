@@ -1,9 +1,7 @@
 # 📧 One-File MBOX & EML Viewer
 
-![License](https://img.shields.io/badge/license-GPLv3-blue.svg)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)
-![Platform](https://img.shields.io/badge/platform-Any%20Browser-darkred.svg)
-![Size](https://img.shields.io/badge/size-~40%20KB-orange.svg)
+![Platform](https://img.shields.io/badge/platform-Browser-darkred.svg)
 
 A single HTML file that opens `.mbox` archives and `.eml` messages in your browser, like a real mail client. No server, no build step, no installation, no internet connection. Download one file, open it, done — and your mail never leaves your computer.
 
@@ -40,11 +38,7 @@ Large archives are indexed in chunks with a progress bar. Files above roughly 50
 
 ## 📄 License
 
-Copyright (C) 2026 Oktay Mercan
-
-This program is free software: you can redistribute it and/or modify it under the terms of the **GNU General Public License v3.0** or (at your option) any later version. See [LICENSE](LICENSE) for the full text.
-
-If you modify and redistribute it, you must release your changes under the same license, keep the copyright notices, and state what you changed. See [CHANGELOG.md](CHANGELOG.md).
+Copyright (C) 2026 Oktay Mercan https://github.com/OKTAYMERCAN/one-file-mbox-and-eml-viewer
 
 ---
 AI used.
