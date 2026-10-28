@@ -3,7 +3,7 @@
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)
 ![Platform](https://img.shields.io/badge/platform-Browser-darkred.svg)
 
-A single HTML file that opens `.mbox` archives and `.eml` messages in your browser, like a real mail client. No server, no build step, no installation, no internet connection. Download one file, open it, done — and your mail never leaves your computer.
+A single HTML file that opens `.mbox` archives and `.eml` messages in your browser, like a real mail client. No server, no build step, no installation, no internet connection. Download one file, open it and view your backups.
 
 ## 🚀 Key Features
 
